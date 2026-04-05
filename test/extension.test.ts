@@ -189,7 +189,7 @@ describe("activate", () => {
     activate(context as never);
     deactivate();
 
-    expect(createOutputChannelSpy).toHaveBeenCalledWith("Codex Launcher");
+    expect(createOutputChannelSpy).toHaveBeenCalledWith("Open Codex");
     expect(registerCommandSpy).toHaveBeenCalledTimes(1);
     expect(createTreeViewSpy).toHaveBeenCalledTimes(1);
     expect(context.subscriptions.length).toBeGreaterThanOrEqual(3);

@@ -1,17 +1,17 @@
 {
-  "name": "codex-launcher",
-  "displayName": "Codex Launcher",
-  "description": "Open a new Codex chat window from a lightweight VS Code extension bridge.",
-  "version": "0.0.7",
+  "name": "open-codex",
+  "displayName": "Open Codex",
+  "description": "Open a new Codex chat window from a minimal VS Code launcher.",
+  "version": "0.0.1",
   "publisher": "xihe0000",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
-    "url": "https://github.com/xihe0000/open_codex.git"
+    "url": "https://github.com/chent1024/vscode-codex-launcher.git"
   },
-  "homepage": "https://github.com/xihe0000/open_codex#readme",
+  "homepage": "https://github.com/chent1024/vscode-codex-launcher#readme",
   "bugs": {
-    "url": "https://github.com/xihe0000/open_codex/issues"
+    "url": "https://github.com/chent1024/vscode-codex-launcher/issues"
   },
   "engines": {
     "vscode": "^1.96.0"
@@ -37,14 +37,14 @@
       {
         "command": "codexLauncher.openNewCodexChat",
         "title": "Open New Codex Chat",
-        "category": "Codex Launcher"
+        "category": "Open Codex"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
           "id": "codexLauncher",
-          "title": "Codex Launcher",
+          "title": "Open Codex",
           "icon": "media/codex-launcher.svg"
         }
       ]
@@ -55,7 +55,7 @@
           "id": "codexLauncher.sidebarView",
           "name": "New Chat",
           "icon": "media/codex-launcher.svg",
-          "contextualTitle": "Codex Launcher",
+          "contextualTitle": "Open Codex",
           "visibility": "visible"
         }
       ]

@@ -12,7 +12,7 @@ export const getErrorMessage = (error: unknown): string => {
     return ERROR_MESSAGES[error.code];
   }
 
-  return "Codex Launcher failed unexpectedly. Check the output panel for details.";
+  return "Open Codex failed unexpectedly. Check the output panel for details.";
 };
 
 export const getCompatibilityMessage = (result: CodexCompatibilityResult): string =>

@@ -2,7 +2,7 @@ export const CODEX_EXTENSION_ID = "openai.chatgpt";
 export const CODEX_COMMAND_ID = "chatgpt.newCodexPanel";
 export const OPEN_NEW_CODEX_CHAT_COMMAND = "codexLauncher.openNewCodexChat";
 export const SIDEBAR_VIEW_ID = "codexLauncher.sidebarView";
-export const OUTPUT_CHANNEL_NAME = "Codex Launcher";
+export const OUTPUT_CHANNEL_NAME = "Open Codex";
 
 export type CodexErrorCode =
   | "CODEX_NOT_INSTALLED"
