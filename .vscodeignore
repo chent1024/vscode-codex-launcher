@@ -1,0 +1,9 @@
+coverage/**
+src/**
+test/**
+codex-launcher-extension-plan.md
+eslint.config.mjs
+tsconfig.eslint.json
+tsconfig.json
+vitest.config.ts
+node_modules/**

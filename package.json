@@ -1,0 +1,90 @@
+{
+  "name": "codex-launcher",
+  "displayName": "Codex Launcher",
+  "description": "Open a new Codex chat window from a lightweight VS Code extension bridge.",
+  "version": "0.0.7",
+  "publisher": "xihe0000",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xihe0000/open_codex.git"
+  },
+  "homepage": "https://github.com/xihe0000/open_codex#readme",
+  "bugs": {
+    "url": "https://github.com/xihe0000/open_codex/issues"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other",
+    "Chat"
+  ],
+  "keywords": [
+    "codex",
+    "openai",
+    "chat",
+    "launcher",
+    "vscode-extension"
+  ],
+  "activationEvents": [
+    "onCommand:codexLauncher.openNewCodexChat",
+    "onView:codexLauncher.sidebarView"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codexLauncher.openNewCodexChat",
+        "title": "Open New Codex Chat",
+        "category": "Codex Launcher"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codexLauncher",
+          "title": "Codex Launcher",
+          "icon": "media/codex-launcher.svg"
+        }
+      ]
+    },
+    "views": {
+      "codexLauncher": [
+        {
+          "id": "codexLauncher.sidebarView",
+          "name": "New Chat",
+          "icon": "media/codex-launcher.svg",
+          "contextualTitle": "Codex Launcher",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "codexLauncher.sidebarView",
+        "contents": "Start a fresh Codex session.\n[Open New Codex](command:codexLauncher.openNewCodexChat)"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "clean": "rm -rf coverage dist",
+    "lint": "eslint .",
+    "test": "vitest run --coverage",
+    "vscode:prepublish": "npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/node": "^22.13.10",
+    "@types/vscode": "^1.96.0",
+    "@vitest/coverage-v8": "^3.0.8",
+    "@vscode/vsce": "^3.7.1",
+    "eslint": "^9.21.0",
+    "globals": "^16.0.0",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.25.0",
+    "vitest": "^3.0.8",
+    "vscode": "^1.1.37"
+  }
+}
