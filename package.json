@@ -3,8 +3,9 @@
   "displayName": "Open Codex",
   "description": "Open a new Codex chat window from a minimal VS Code launcher.",
   "version": "0.0.1",
-  "publisher": "xihe0000",
-  "license": "UNLICENSED",
+  "publisher": "chent",
+  "icon": "media/codex-launcher.png",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/chent1024/vscode-codex-launcher.git"

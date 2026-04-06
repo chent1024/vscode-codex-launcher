@@ -1,7 +1,7 @@
 # Open Codex
 
 <p align="center">
-  <img src="media/codex-launcher.svg" alt="Open Codex icon" width="96" />
+  <img src="media/codex-launcher.png" alt="Open Codex icon" width="96" />
 </p>
 
 Open Codex is a minimal VS Code extension that adds a launcher for opening a fresh Codex chat from the sidebar. It delegates to the installed OpenAI ChatGPT extension instead of implementing its own chat UI.
@@ -29,10 +29,10 @@ You can package and install the extension locally:
 ```bash
 npm install
 npx @vscode/vsce package
-code --install-extension open-codex-0.0.1.vsix
+code --install-extension chent.open-codex
 ```
 
-If you use Cursor or another VS Code-compatible editor, replace `code` with the corresponding CLI command.
+For local `.vsix` installation, replace the Marketplace identifier with the generated package filename. If you use Cursor or another VS Code-compatible editor, replace `code` with the corresponding CLI command.
 
 ## Usage
 
