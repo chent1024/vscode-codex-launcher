@@ -81,43 +81,41 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
 
       .container {
         display: grid;
-        gap: 12px;
+        gap: 14px;
+      }
+
+      .description {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.45;
+        color: var(--vscode-foreground);
       }
 
       .button {
         width: 100%;
-        border: 0;
-        border-radius: 14px;
-        padding: 14px 16px;
+        border: 1px solid color-mix(in srgb, var(--vscode-button-background) 80%, white 16%);
+        border-radius: 8px;
+        padding: 10px 16px;
         font: inherit;
-        font-weight: 700;
+        font-size: 14px;
+        font-weight: 500;
         color: var(--vscode-button-foreground);
-        background:
-          linear-gradient(
-            135deg,
-            color-mix(in srgb, var(--vscode-button-background) 82%, black 18%) 0%,
-            color-mix(in srgb, var(--vscode-button-background) 96%, black 4%) 100%
-          );
+        background: color-mix(in srgb, var(--vscode-button-background) 94%, #0078d4 6%);
         cursor: pointer;
-        box-shadow:
-          0 10px 20px color-mix(in srgb, var(--vscode-button-background) 18%, transparent),
-          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
         transition:
-          transform 140ms ease,
-          box-shadow 140ms ease,
+          background-color 140ms ease,
+          border-color 140ms ease,
           filter 140ms ease;
       }
 
       .button:hover {
-        transform: translateY(-1px);
-        filter: brightness(1.02);
+        background: color-mix(in srgb, var(--vscode-button-hoverBackground) 92%, #0078d4 8%);
+        border-color: color-mix(in srgb, var(--vscode-button-hoverBackground) 74%, white 18%);
       }
 
       .button:active {
-        transform: translateY(0);
-        box-shadow:
-          0 6px 14px color-mix(in srgb, var(--vscode-button-background) 14%, transparent),
-          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        filter: brightness(0.98);
       }
 
       .button:focus-visible {
@@ -145,6 +143,7 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
   </head>
   <body>
     <div class="container">
+      <p class="description">Start a fresh Codex session.</p>
       <button class="button" id="open-codex" type="button">Open New Codex</button>
       <label class="toggle" for="auto-close">
         <input id="auto-close" type="checkbox" ${autoCloseSidebar ? "checked" : ""} />
