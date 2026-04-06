@@ -1,7 +1,7 @@
 {
   "name": "open-codex",
   "displayName": "Open Codex",
-  "description": "Open a new Codex chat window from a minimal VS Code launcher.",
+  "description": "Open new Codex tabs from the VS Code sidebar, status bar, and command palette.",
   "version": "0.0.1",
   "publisher": "chent",
   "icon": "media/codex-launcher.png",
@@ -30,17 +30,11 @@
   ],
   "activationEvents": [
     "onCommand:codexLauncher.openNewCodexChat",
-    "onView:codexLauncher.sidebarView"
+    "onView:codexLauncher.sidebarView",
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "commands": [
-      {
-        "command": "codexLauncher.openNewCodexChat",
-        "title": "Open New Codex Chat",
-        "category": "Open Codex"
-      }
-    ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -54,17 +48,16 @@
       "codexLauncher": [
         {
           "id": "codexLauncher.sidebarView",
-          "name": "New Chat",
-          "icon": "media/codex-launcher.svg",
-          "contextualTitle": "Open Codex",
-          "visibility": "visible"
+          "name": "Launcher",
+          "type": "webview"
         }
       ]
     },
-    "viewsWelcome": [
+    "commands": [
       {
-        "view": "codexLauncher.sidebarView",
-        "contents": "Start a fresh Codex session.\n[Open New Codex](command:codexLauncher.openNewCodexChat)"
+        "command": "codexLauncher.openNewCodexChat",
+        "title": "Open New Codex",
+        "category": "Open Codex"
       }
     ]
   },

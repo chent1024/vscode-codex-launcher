@@ -1,6 +1,16 @@
+import { randomUUID } from "node:crypto";
 import type * as vscode from "vscode";
 
-import { CodexLauncherError, CODEX_COMMAND_ID, CODEX_EXTENSION_ID, type CodexEnvironmentDetails } from "./types";
+import {
+  CodexLauncherError,
+  CODEX_COMMAND_ID,
+  CODEX_CUSTOM_EDITOR_VIEW_TYPE,
+  CODEX_EXTENSION_ID,
+  CODEX_NEW_PANEL_PATH,
+  CODEX_URI_AUTHORITY,
+  CODEX_URI_SCHEME,
+  type CodexEnvironmentDetails
+} from "./types";
 
 export const findCodexExtension = (
   vscodeApi: typeof vscode
@@ -58,6 +68,34 @@ export const launchCodexChat = async (
     );
   }
 };
+
+export const launchCodexChatViaUniqueUri = async (
+  vscodeApi: typeof vscode,
+  details: CodexEnvironmentDetails
+): Promise<void> => {
+  const targetUri = createUniqueCodexPanelUri(vscodeApi);
+
+  try {
+    await vscodeApi.commands.executeCommand("vscode.openWith", targetUri, CODEX_CUSTOM_EDITOR_VIEW_TYPE, {
+      preserveFocus: false,
+      preview: false
+    });
+  } catch (error) {
+    throw new CodexLauncherError(
+      "CODEX_COMMAND_EXEC_FAILED",
+      "Failed to open a unique Codex editor resource.",
+      details,
+      error
+    );
+  }
+};
+
+export const createUniqueCodexPanelUri = (vscodeApi: Pick<typeof vscode, "Uri">): vscode.Uri =>
+  vscodeApi.Uri.file(CODEX_NEW_PANEL_PATH).with({
+    authority: CODEX_URI_AUTHORITY,
+    query: `launcherSession=${randomUUID()}`,
+    scheme: CODEX_URI_SCHEME
+  });
 
 const getExtensionVersion = (extension: vscode.Extension<unknown> | undefined): string | null => {
   const version = extension?.packageJSON && "version" in extension.packageJSON ? extension.packageJSON.version : undefined;

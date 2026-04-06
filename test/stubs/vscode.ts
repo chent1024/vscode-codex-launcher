@@ -4,6 +4,11 @@ export enum TreeItemCollapsibleState {
   Expanded = 2
 }
 
+export enum StatusBarAlignment {
+  Left = 1,
+  Right = 2
+}
+
 export class ThemeIcon {
   public constructor(public readonly id: string) {}
 }
@@ -27,11 +32,41 @@ export const commands = {
   })
 };
 
+export const Uri = {
+  file: (path: string) => ({
+    authority: "",
+    fsPath: path,
+    path,
+    query: "",
+    scheme: "file",
+    with: ({ authority, query, scheme }: { authority?: string; query?: string; scheme?: string }) => ({
+      authority: authority ?? "",
+      fsPath: path,
+      path,
+      query: query ?? "",
+      scheme: scheme ?? "file"
+    })
+  }),
+  joinPath: (base: { path: string; scheme?: string }, ...paths: string[]) => ({
+    authority: "",
+    fsPath: [base.path, ...paths].join("/").replace(/\/+/g, "/"),
+    path: [base.path, ...paths].join("/").replace(/\/+/g, "/"),
+    query: "",
+    scheme: base.scheme ?? "file"
+  })
+};
+
 export const extensions = {
   getExtension: () => undefined
 };
 
 export const version = "test";
+
+export const env = {
+  clipboard: {
+    writeText: async () => undefined
+  }
+};
 
 export const window = {
   createOutputChannel: () => ({
@@ -39,12 +74,15 @@ export const window = {
     dispose: () => undefined,
     show: () => undefined
   }),
-  createTreeView: () => ({
+  createStatusBarItem: () => ({
+    command: "",
     dispose: () => undefined,
-    onDidChangeVisibility: () => ({
-      dispose: () => undefined
-    }),
-    visible: false
+    show: () => undefined,
+    text: "",
+    tooltip: ""
+  }),
+  registerWebviewViewProvider: () => ({
+    dispose: () => undefined
   }),
   showErrorMessage: async () => undefined,
   showInformationMessage: async () => undefined

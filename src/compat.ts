@@ -1,9 +1,20 @@
 import type * as vscode from "vscode";
 
-import { activateCodexExtension, createEnvironmentDetails, ensureCodexCommandAvailable, findCodexExtension, launchCodexChat } from "./codexBridge";
+import {
+  activateCodexExtension,
+  createEnvironmentDetails,
+  ensureCodexCommandAvailable,
+  findCodexExtension,
+  launchCodexChat,
+  launchCodexChatViaUniqueUri
+} from "./codexBridge";
 import type { Logger } from "./logger";
 import { toErrorMetadata } from "./logger";
 import { CodexLauncherError, type CodexCompatibilityResult } from "./types";
+
+interface OpenNewCodexChatOptions {
+  useExperimentalMultiTab?: boolean;
+}
 
 export const checkCodexCompatibility = async (
   vscodeApi: typeof vscode,
@@ -52,16 +63,56 @@ export const checkCodexCompatibility = async (
   };
 };
 
-export const openNewCodexChat = async (vscodeApi: typeof vscode, logger: Logger): Promise<void> => {
-  const compatibility = await checkCodexCompatibility(vscodeApi, logger);
-  if (!compatibility.ok) {
+export const openNewCodexChat = async (
+  vscodeApi: typeof vscode,
+  logger: Logger,
+  options?: OpenNewCodexChatOptions
+): Promise<void> => {
+  const extension = findCodexExtension(vscodeApi);
+  const details = createEnvironmentDetails(vscodeApi, extension);
+  const useExperimentalMultiTab = options?.useExperimentalMultiTab ?? false;
+
+  logger.info("Opening a new Codex chat.", details);
+
+  if (!extension) {
     throw new CodexLauncherError(
-      compatibility.errorCode,
-      "Codex compatibility check failed.",
-      compatibility.details
+      "CODEX_NOT_INSTALLED",
+      "Codex extension is not installed.",
+      details
     );
   }
 
-  await launchCodexChat(vscodeApi, compatibility.details);
-  logger.info("Opened a new Codex chat window.", compatibility.details);
+  try {
+    await activateCodexExtension(extension, details);
+  } catch (error) {
+    logger.error("Codex extension activation failed.", toErrorMetadata(error));
+    throw error;
+  }
+
+  details.commandAvailable = await ensureCodexCommandAvailable(vscodeApi, details);
+
+  if (!details.commandAvailable) {
+    throw new CodexLauncherError(
+      "CODEX_COMMAND_MISSING",
+      "Codex open chat command is missing.",
+      details
+    );
+  }
+
+  if (!useExperimentalMultiTab) {
+    await launchCodexChat(vscodeApi, details);
+    logger.info("Opened a new Codex chat via the public command.", details);
+    return;
+  }
+
+  try {
+    await launchCodexChatViaUniqueUri(vscodeApi, details);
+    logger.info("Opened a new Codex editor via a unique URI.", details);
+    return;
+  } catch (error) {
+    logger.warn("Unique Codex URI launch failed. Falling back to public command if available.", toErrorMetadata(error));
+  }
+
+  await launchCodexChat(vscodeApi, details);
+  logger.info("Opened a new Codex chat via the public command fallback.", details);
 };

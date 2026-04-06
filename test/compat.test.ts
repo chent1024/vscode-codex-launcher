@@ -12,7 +12,7 @@ const createLogger = (): Logger => ({
 const createVscodeApi = (options?: {
   activate?: () => Promise<void>;
   commandList?: string[];
-  executeCommand?: (commandId: string) => Promise<void>;
+  executeCommand?: (commandId: string, ...args: unknown[]) => Promise<void>;
   extensionPresent?: boolean;
   extensionVersion?: string;
 }) => {
@@ -22,6 +22,22 @@ const createVscodeApi = (options?: {
   const executeCommand = options?.executeCommand ?? vi.fn().mockResolvedValue(undefined);
 
   return {
+    Uri: {
+      file: (path: string) => ({
+        authority: "",
+        fsPath: path,
+        path,
+        query: "",
+        scheme: "file",
+        with: ({ authority, query, scheme }: { authority?: string; query?: string; scheme?: string }) => ({
+          authority: authority ?? "",
+          fsPath: path,
+          path,
+          query: query ?? "",
+          scheme: scheme ?? "file"
+        })
+      })
+    },
     commands: {
       executeCommand: vi.fn(executeCommand),
       getCommands: vi.fn().mockResolvedValue(commandList)
@@ -93,23 +109,61 @@ describe("checkCodexCompatibility", () => {
 });
 
 describe("openNewCodexChat", () => {
-  it("executes the Codex command when compatibility checks pass", async () => {
+  it("opens Codex through the public command by default", async () => {
     const logger = createLogger();
     const executeCommand = vi.fn().mockResolvedValue(undefined);
     const vscodeApi = createVscodeApi({ executeCommand });
 
     await openNewCodexChat(vscodeApi as never, logger);
 
+    expect(vscodeApi.commands.executeCommand).toHaveBeenCalledTimes(1);
     expect(vscodeApi.commands.executeCommand).toHaveBeenCalledWith("chatgpt.newCodexPanel");
   });
 
-  it("throws a wrapped execution error when command execution fails", async () => {
+  it("opens Codex through a unique custom-editor URI when experimental multi-tab is enabled", async () => {
+    const logger = createLogger();
+    const executeCommand = vi.fn().mockResolvedValue(undefined);
+    const vscodeApi = createVscodeApi({ executeCommand });
+
+    await openNewCodexChat(vscodeApi as never, logger, { useExperimentalMultiTab: true });
+
+    expect(vscodeApi.commands.executeCommand).toHaveBeenCalledTimes(1);
+    expect(vscodeApi.commands.executeCommand.mock.calls[0][0]).toBe("vscode.openWith");
+    expect(vscodeApi.commands.executeCommand.mock.calls[0][2]).toBe("chatgpt.conversationEditor");
+    expect(vscodeApi.commands.executeCommand.mock.calls[0][1]).toMatchObject({
+      authority: "route",
+      path: "/extension/panel/new",
+      query: expect.stringMatching(/^launcherSession=/),
+      scheme: "openai-codex"
+    });
+  });
+
+  it("falls back to the public Codex command when the experimental URI path fails", async () => {
+    const logger = createLogger();
+    const executeCommand = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("openWith failed"))
+      .mockResolvedValueOnce(undefined);
+    const vscodeApi = createVscodeApi({ executeCommand });
+
+    await openNewCodexChat(vscodeApi as never, logger, { useExperimentalMultiTab: true });
+
+    expect(vscodeApi.commands.executeCommand).toHaveBeenNthCalledWith(
+      2,
+      "chatgpt.newCodexPanel"
+    );
+  });
+
+  it("throws a wrapped execution error when both unique URI and public command launch fail", async () => {
     const logger = createLogger();
     const vscodeApi = createVscodeApi({
-      executeCommand: vi.fn().mockRejectedValue(new Error("launch failed"))
+      executeCommand: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("openWith failed"))
+        .mockRejectedValueOnce(new Error("launch failed"))
     });
 
-    await expect(openNewCodexChat(vscodeApi as never, logger)).rejects.toMatchObject({
+    await expect(openNewCodexChat(vscodeApi as never, logger, { useExperimentalMultiTab: true })).rejects.toMatchObject({
       code: "CODEX_COMMAND_EXEC_FAILED",
       name: "CodexLauncherError"
     });
