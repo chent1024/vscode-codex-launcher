@@ -84,13 +84,6 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
         gap: 14px;
       }
 
-      .description {
-        margin: 0;
-        font-size: 14px;
-        line-height: 1.45;
-        color: var(--vscode-foreground);
-      }
-
       .button {
         width: 100%;
         border: 1px solid color-mix(in srgb, var(--vscode-button-background) 80%, white 16%);
@@ -143,7 +136,6 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
   </head>
   <body>
     <div class="container">
-      <p class="description">Start a fresh Codex session.</p>
       <button class="button" id="open-codex" type="button">Open New Codex</button>
       <label class="toggle" for="auto-close">
         <input id="auto-close" type="checkbox" ${autoCloseSidebar ? "checked" : ""} />
