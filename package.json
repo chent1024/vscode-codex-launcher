@@ -64,8 +64,8 @@
   "scripts": {
     "build": "tsc -p .",
     "clean": "rm -rf coverage dist",
-    "install:reload": "bash ./scripts/install-and-reload.sh",
     "lint": "eslint .",
+    "package:vsix": "bash ./scripts/package-vsix.sh",
     "test": "vitest run --coverage",
     "vscode:prepublish": "npm run build"
   },

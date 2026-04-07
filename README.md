@@ -29,23 +29,42 @@ You can package and install the extension locally:
 
 ```bash
 npm install
-npx @vscode/vsce package
-code --install-extension chent.open-codex
+npm run package:vsix
+code --install-extension .tmp/chent.open-codex-0.0.1.vsix --force
 ```
 
-For local `.vsix` installation, replace the Marketplace identifier with the generated package filename. If you use Cursor or another VS Code-compatible editor, replace `code` with the corresponding CLI command.
+If you use Cursor or another VS Code-compatible editor, replace `code` with the corresponding CLI command.
 
-For local development, you can also use the one-click script to build, package, install, and reload the editor window:
+For local development, the generated `.vsix` file is versioned, for example:
 
 ```bash
-npm run install:reload
+.tmp/chent.open-codex-0.0.1.vsix
 ```
 
-Optional flags:
+## GitHub Releases
 
-- `bash ./scripts/install-and-reload.sh --cli cursor`
-- `bash ./scripts/install-and-reload.sh --no-reload`
-- `bash ./scripts/install-and-reload.sh --skip-npm-install`
+If the extension is not available on the VS Code Marketplace yet, attach the generated `.vsix` file to each GitHub Release.
+
+Recommended release flow:
+
+```bash
+npm install
+npm run package:vsix
+```
+
+Then upload the generated file from `.tmp/`, for example:
+
+```bash
+.tmp/chent.open-codex-0.0.1.vsix
+```
+
+Manual install instructions for release notes:
+
+```bash
+code --install-extension chent.open-codex-0.0.1.vsix --force
+```
+
+If the user downloaded the file to another location, replace the filename with the actual local path.
 
 ## Usage
 
