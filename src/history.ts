@@ -6,6 +6,7 @@ export type SavedCodexSessionStatus = "Completed" | "In Progress" | "Failed";
 
 export interface SavedCodexSession {
   createdAt: string;
+  openedAt: string;
   resource: string;
   status: SavedCodexSessionStatus;
   title: string;
@@ -14,6 +15,7 @@ export interface SavedCodexSession {
 
 export interface SavedCodexSessionSnapshot {
   createdAt?: string;
+  openedAt?: string;
   resource: string;
   status?: SavedCodexSessionStatus;
   title?: string;
@@ -26,7 +28,7 @@ export interface SavedCodexSessionStore {
 }
 
 const HISTORY_KEY = "codexLauncher.savedSessions";
-const MAX_SESSION_COUNT = 40;
+const MAX_SESSION_COUNT = 50;
 const DEFAULT_TITLE = "Codex Session";
 const DEFAULT_STATUS: SavedCodexSessionStatus = "Completed";
 
@@ -40,6 +42,7 @@ export class GlobalStateSavedCodexSessionStore implements SavedCodexSessionStore
   public async upsert(snapshot: SavedCodexSessionSnapshot): Promise<SavedCodexSession> {
     const resource = normalizeResource(snapshot.resource);
     const createdAt = normalizeDate(snapshot.createdAt);
+    const openedAt = normalizeDate(snapshot.openedAt);
     const updatedAt = normalizeDate(snapshot.updatedAt);
     const status = normalizeStatus(snapshot.status);
     const title = normalizeTitle(snapshot.title);
@@ -50,12 +53,14 @@ export class GlobalStateSavedCodexSessionStore implements SavedCodexSessionStore
       ? {
           ...existingSession,
           createdAt: createdAt ?? existingSession.createdAt,
+          openedAt: openedAt ?? existingSession.openedAt,
           status,
           title,
           updatedAt: updatedAt ?? now
         }
       : {
           createdAt: createdAt ?? now,
+          openedAt: openedAt ?? updatedAt ?? createdAt ?? now,
           resource,
           status,
           title,
@@ -69,7 +74,10 @@ export class GlobalStateSavedCodexSessionStore implements SavedCodexSessionStore
   }
 }
 
-export const createSavedCodexSessionSnapshotFromTab = (tab: vscode.Tab): SavedCodexSessionSnapshot | null => {
+export const createSavedCodexSessionSnapshotFromTab = (
+  tab: vscode.Tab,
+  options: { openedAt?: string } = {}
+): SavedCodexSessionSnapshot | null => {
   const input = tab.input;
   if (!isCodexCustomEditorInput(input)) {
     return null;
@@ -80,6 +88,7 @@ export const createSavedCodexSessionSnapshotFromTab = (tab: vscode.Tab): SavedCo
   }
 
   return {
+    openedAt: options.openedAt,
     resource: input.uri.toString(),
     title: tab.label
   };
@@ -124,13 +133,23 @@ const sanitizeSessions = (sessions: SavedCodexSession[]): SavedCodexSession[] =>
         typeof session?.resource === "string" &&
         isCodexSessionResource(session.resource)
     )
-    .map((session) => ({
-      createdAt: session.createdAt,
-      resource: normalizeResource(session.resource),
-      status: normalizeStatus(session.status),
-      title: normalizeTitle(session.title),
-      updatedAt: session.updatedAt
-    }))
+    .map((session) => {
+      const createdAt = normalizeDate(session.createdAt) ?? new Date(0).toISOString();
+      const updatedAt = normalizeDate(session.updatedAt) ?? createdAt;
+      const openedAt =
+        normalizeDate("openedAt" in session ? session.openedAt : undefined) ??
+        updatedAt ??
+        createdAt;
+
+      return {
+        createdAt,
+        openedAt,
+        resource: normalizeResource(session.resource),
+        status: normalizeStatus(session.status),
+        title: normalizeTitle(session.title),
+        updatedAt
+      };
+    })
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
 
 const normalizeResource = (resource: string): string => resource.trim();
@@ -156,6 +175,15 @@ const normalizeStatus = (status?: string): SavedCodexSessionStatus => {
 };
 
 const normalizeTitle = (title?: string): string => {
-  const normalized = title?.replace(/\s+/g, " ").trim() ?? "";
+  const normalized = stripCorruptedTitleSuffix(title?.replace(/\s+/g, " ").trim() ?? "");
   return normalized.length > 0 ? normalized : DEFAULT_TITLE;
+};
+
+const stripCorruptedTitleSuffix = (title: string): string => {
+  const trailingNoise = title.match(/[\[\]{}'",:]+$/);
+  if (!trailingNoise || trailingNoise[0].length < 4) {
+    return title;
+  }
+
+  return title.slice(0, -trailingNoise[0].length).trimEnd();
 };

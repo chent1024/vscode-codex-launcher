@@ -54,7 +54,7 @@ export const activate = (context: vscode.ExtensionContext, deps: ActivateDepende
   context.subscriptions.push(sessionSync);
   context.subscriptions.push(
     vscode.window.tabGroups.onDidChangeTabs((event) => {
-      void captureCodexSessionTabs(event.opened, sessionStore, sidebarViewProvider, logger);
+      void captureCodexSessionTabs(event.opened, sessionStore, sidebarViewProvider, logger, { recordOpenTime: true });
       void captureCodexSessionTabs(event.changed, sessionStore, sidebarViewProvider, logger);
     })
   );
@@ -143,12 +143,14 @@ const captureCodexSessionTabs = async (
   tabs: readonly vscode.Tab[],
   sessionStore: SavedCodexSessionStore,
   sidebarViewProvider: SidebarLauncherViewProvider,
-  logger: Logger
+  logger: Logger,
+  options: { recordOpenTime?: boolean } = {}
 ): Promise<void> => {
   let captured = false;
+  const openedAt = options.recordOpenTime ? new Date().toISOString() : undefined;
 
   for (const tab of tabs) {
-    const snapshot = createSavedCodexSessionSnapshotFromTab(tab);
+    const snapshot = createSavedCodexSessionSnapshotFromTab(tab, { openedAt });
     if (!snapshot) {
       continue;
     }

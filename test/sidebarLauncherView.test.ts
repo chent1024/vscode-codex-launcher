@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as vscode from "vscode";
 
@@ -18,6 +18,7 @@ const createGlobalState = (overrides?: Record<string, boolean>) => {
 const createSessionStore = (
   sessions: Array<{
     createdAt: string;
+    openedAt: string;
     resource: string;
     status: "Completed" | "In Progress" | "Failed";
     title: string;
@@ -29,6 +30,8 @@ const createSessionStore = (
 });
 
 const createResolvedView = () => {
+  let onDidChangeVisibilityHandler: (() => void) | undefined;
+  let onDidDisposeHandler: (() => void) | undefined;
   let onDidReceiveMessageHandler: ((message: unknown) => Promise<void>) | undefined;
   const webview = {
     asWebviewUri: vi.fn((uri) => uri),
@@ -41,15 +44,29 @@ const createResolvedView = () => {
     options: {}
   };
   const view = {
-    onDidDispose: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidChangeVisibility: vi.fn((handler) => {
+      onDidChangeVisibilityHandler = handler;
+      return { dispose: vi.fn() };
+    }),
+    onDidDispose: vi.fn((handler) => {
+      onDidDisposeHandler = handler;
+      return { dispose: vi.fn() };
+    }),
+    visible: true,
     webview
   };
 
   return {
+    fireDispose: () => onDidDisposeHandler?.(),
+    fireVisibilityChange: () => onDidChangeVisibilityHandler?.(),
     getHandler: () => onDidReceiveMessageHandler,
     view
   };
 };
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("SidebarLauncherViewProvider", () => {
   it("renders the button and saved Codex sessions list", () => {
@@ -60,6 +77,7 @@ describe("SidebarLauncherViewProvider", () => {
     const sessionStore = createSessionStore([
       {
         createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        openedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
         resource: "openai-codex://route/local/thread-1",
         status: "Completed",
         title: "Fix prompt handling",
@@ -81,7 +99,10 @@ describe("SidebarLauncherViewProvider", () => {
     expect(view.webview.html).toContain("Completed");
     expect(view.webview.html).toContain("data-session-resource=\"openai-codex://route/local/thread-1\"");
     expect(view.webview.html).toContain("session-list-wrap");
-    expect(view.webview.html).toContain("max-height: min(280px, 42vh)");
+    expect(view.webview.html).toContain("position: fixed");
+    expect(view.webview.html).toContain("flex-direction: column");
+    expect(view.webview.html).toContain("sessions-panel");
+    expect(view.webview.html).toContain("flex: 1 1 auto");
     expect(view.webview.html).not.toContain("session-icon");
     expect(view.webview.html).not.toContain("session-dot");
   });
@@ -170,5 +191,52 @@ describe("SidebarLauncherViewProvider", () => {
 
     expect(globalState.update).toHaveBeenCalledWith("codexLauncher.autoCloseSidebarOnSuccess", false);
     expect(globalState.update).toHaveBeenCalledWith("codexLauncher.experimentalMultiTab", true);
+  });
+
+  it("refreshes the session list when another window updates the shared history", async () => {
+    vi.useFakeTimers();
+
+    const globalState = createGlobalState({
+      "codexLauncher.autoCloseSidebarOnSuccess": true,
+      "codexLauncher.experimentalMultiTab": false
+    });
+    const initialSession = {
+      createdAt: "2026-04-07T00:00:00.000Z",
+      openedAt: "2026-04-07T00:00:00.000Z",
+      resource: "openai-codex://route/local/thread-1",
+      status: "Completed" as const,
+      title: "First session",
+      updatedAt: "2026-04-07T00:00:00.000Z"
+    };
+    const updatedSession = {
+      createdAt: "2026-04-07T00:05:00.000Z",
+      openedAt: "2026-04-07T00:05:00.000Z",
+      resource: "openai-codex://route/local/thread-2",
+      status: "Completed" as const,
+      title: "Second session",
+      updatedAt: "2026-04-07T00:05:00.000Z"
+    };
+    let sessions = [initialSession];
+    const sessionStore = {
+      list: vi.fn(() => sessions),
+      upsert: vi.fn()
+    };
+    const { fireDispose, view } = createResolvedView();
+    const provider = new SidebarLauncherViewProvider(
+      vscode.Uri.file("/test-extension"),
+      globalState as never,
+      sessionStore as never
+    );
+
+    provider.resolveWebviewView(view as never);
+    expect(view.webview.html).toContain("First session");
+    expect(view.webview.html).not.toContain("Second session");
+
+    sessions = [updatedSession, initialSession];
+    await vi.advanceTimersByTimeAsync(1600);
+
+    expect(view.webview.html).toContain("Second session");
+
+    fireDispose();
   });
 });

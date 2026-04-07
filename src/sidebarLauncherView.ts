@@ -8,8 +8,12 @@ import {
   RESUME_SAVED_CODEX_SESSION_COMMAND
 } from "./types";
 
+const SESSION_SYNC_POLL_INTERVAL_MS = 1500;
+
 export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
   private currentView: vscode.WebviewView | undefined;
+  private sessionSyncInterval: ReturnType<typeof setInterval> | undefined;
+  private sessionSignature = "[]";
 
   public constructor(
     private readonly extensionUri: vscode.Uri,
@@ -19,9 +23,23 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.currentView = webviewView;
+    this.sessionSignature = this.createSessionSignature(this.sessionStore.list());
     webviewView.onDidDispose(() => {
       if (this.currentView === webviewView) {
         this.currentView = undefined;
+        this.stopSessionSync();
+      }
+    });
+    webviewView.onDidChangeVisibility(() => {
+      if (this.currentView !== webviewView) {
+        return;
+      }
+
+      if (webviewView.visible) {
+        this.syncSessionsFromStore();
+        this.startSessionSync();
+      } else {
+        this.stopSessionSync();
       }
     });
 
@@ -30,6 +48,9 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [this.extensionUri]
     };
     this.render(webviewView);
+    if (webviewView.visible) {
+      this.startSessionSync();
+    }
     webviewView.webview.onDidReceiveMessage(async (message) => {
       if (!message || typeof message !== "object" || !("type" in message)) {
         return;
@@ -61,8 +82,55 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
 
   public refresh(): void {
     if (this.currentView) {
+      this.sessionSignature = this.createSessionSignature(this.sessionStore.list());
       this.render(this.currentView);
     }
+  }
+
+  private startSessionSync(): void {
+    if (this.sessionSyncInterval) {
+      return;
+    }
+
+    this.sessionSyncInterval = setInterval(() => {
+      this.syncSessionsFromStore();
+    }, SESSION_SYNC_POLL_INTERVAL_MS);
+  }
+
+  private stopSessionSync(): void {
+    if (!this.sessionSyncInterval) {
+      return;
+    }
+
+    clearInterval(this.sessionSyncInterval);
+    this.sessionSyncInterval = undefined;
+  }
+
+  private syncSessionsFromStore(): void {
+    if (!this.currentView || !this.currentView.visible) {
+      return;
+    }
+
+    const sessions = this.sessionStore.list();
+    const nextSignature = this.createSessionSignature(sessions);
+    if (nextSignature === this.sessionSignature) {
+      return;
+    }
+
+    this.sessionSignature = nextSignature;
+    this.render(this.currentView);
+  }
+
+  private createSessionSignature(sessions: SavedCodexSession[]): string {
+    return JSON.stringify(
+      sessions.map((session) => ({
+        openedAt: session.openedAt,
+        resource: session.resource,
+        status: session.status,
+        title: session.title,
+        updatedAt: session.updatedAt
+      }))
+    );
   }
 
   private async runCommandAndMaybeClose(command: string, payload?: { resource: string }): Promise<void> {
@@ -133,21 +201,30 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
         color-scheme: light dark;
       }
 
+      html {
+        height: 100%;
+      }
+
       * {
         box-sizing: border-box;
       }
 
       body {
         margin: 0;
-        padding: 14px 0;
+        height: 100%;
         font-family: var(--vscode-font-family);
         background: var(--vscode-sideBar-background);
         color: var(--vscode-foreground);
       }
 
       .container {
-        display: grid;
-        gap: 14px;
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px 0;
+        overflow: hidden;
       }
 
       .launcher {
@@ -192,9 +269,18 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
         color: var(--vscode-foreground);
       }
 
+      .sessions-panel {
+        min-height: 0;
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
       .session-list-wrap {
+        flex: 1 1 auto;
         margin: 0 8px;
-        max-height: min(280px, 42vh);
+        min-height: 0;
         overflow-y: auto;
       }
 
@@ -293,9 +379,11 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
       <div class="launcher">
         <button class="button" id="open-codex" type="button">Open New Codex</button>
       </div>
-      <h2 class="section-title">Sessions</h2>
-      <div class="session-list-wrap">
-        <ul class="session-list">${sessionMarkup}</ul>
+      <div class="sessions-panel">
+        <h2 class="section-title">Sessions</h2>
+        <div class="session-list-wrap">
+          <ul class="session-list">${sessionMarkup}</ul>
+        </div>
       </div>
       <div class="settings">
         <label class="toggle" for="auto-close">
