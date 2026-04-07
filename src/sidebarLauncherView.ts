@@ -76,6 +76,17 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
       if (message.type === "resume-codex-session") {
         const resource = "resource" in message && typeof message.resource === "string" ? message.resource : "";
         await this.runCommandAndMaybeClose(RESUME_SAVED_CODEX_SESSION_COMMAND, { resource });
+        return;
+      }
+
+      if (message.type === "delete-codex-session") {
+        const resource = "resource" in message && typeof message.resource === "string" ? message.resource : "";
+        if (!resource) {
+          return;
+        }
+
+        await this.sessionStore.remove(resource);
+        this.refresh();
       }
     });
   }
@@ -128,7 +139,8 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
         resource: session.resource,
         status: session.status,
         title: session.title,
-        updatedAt: session.updatedAt
+        updatedAt: session.updatedAt,
+        workspaceLabel: session.workspaceLabel
       }))
     );
   }
@@ -171,16 +183,30 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
               const title = escapeHtml(session.title);
               const time = escapeHtml(formatRelativeTime(session.updatedAt));
               const resource = escapeAttribute(session.resource);
+              const workspaceLabel = session.workspaceLabel ? escapeHtml(session.workspaceLabel) : "";
+              const workspaceMarkup =
+                workspaceLabel.length > 0
+                  ? `<span class="session-workspace">${workspaceLabel}</span>`
+                  : `<span class="session-workspace session-workspace-empty">No workspace</span>`;
 
-              return `<li>
+              return `<li class="session-row">
                 <button class="session-item" type="button" data-session-resource="${resource}">
-                  <span class="session-copy">
+                  <span class="session-main">
                     <span class="session-title">${title}</span>
-                    <span class="session-status">${escapeHtml(session.status)}</span>
+                    ${workspaceMarkup}
                   </span>
                   <span class="session-meta">
                     <span class="session-time">${time}</span>
                   </span>
+                </button>
+                <button
+                  class="session-delete"
+                  type="button"
+                  aria-label="Delete session ${title}"
+                  title="Delete"
+                  data-delete-session-resource="${resource}"
+                >
+                  ×
                 </button>
               </li>`;
             })
@@ -279,7 +305,6 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
 
       .session-list-wrap {
         flex: 1 1 auto;
-        margin: 0 8px;
         min-height: 0;
         overflow-y: auto;
       }
@@ -290,6 +315,10 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
         padding: 0;
       }
 
+      .session-row {
+        position: relative;
+      }
+
       .session-item {
         width: 100%;
         border: 0;
@@ -297,8 +326,8 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 8px 10px;
         align-items: start;
-        padding: 8px 10px;
-        border-radius: 6px;
+        padding: 12px 14px;
+        border-radius: 0;
         font: inherit;
         text-align: left;
         color: inherit;
@@ -306,46 +335,113 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
         cursor: pointer;
       }
 
-      .session-item:hover {
+      .session-row:hover .session-item {
         background: color-mix(in srgb, var(--vscode-list-hoverBackground) 70%, transparent);
       }
 
-      .session-copy {
+      .session-delete {
+        position: absolute;
+        top: 8px;
+        right: 14px;
+        z-index: 1;
+        width: 26px;
+        height: 26px;
+        border: 0;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transform: scale(0.92);
+        font: inherit;
+        font-size: 16px;
+        line-height: 1;
+        color: var(--vscode-descriptionForeground);
+        background: color-mix(in srgb, var(--vscode-sideBar-background) 92%, transparent);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-sideBar-background) 65%, transparent);
+        cursor: pointer;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease, transform 120ms ease;
+      }
+
+      .session-row:hover .session-delete,
+      .session-row:focus-within .session-delete {
+        opacity: 1;
+        pointer-events: auto;
+        transform: scale(1);
+      }
+
+      .session-delete:hover {
+        color: var(--vscode-foreground);
+        background: color-mix(in srgb, var(--vscode-list-hoverBackground) 85%, transparent);
+      }
+
+      .session-delete-confirm {
+        opacity: 1;
+        pointer-events: auto;
+        color: var(--vscode-button-foreground);
+        background: color-mix(in srgb, #c84b4b 82%, var(--vscode-button-background) 18%);
+        box-shadow: 0 0 0 1px color-mix(in srgb, #c84b4b 68%, transparent);
+        transform: scale(1);
+      }
+
+      .session-delete:focus-visible {
+        opacity: 1;
+        pointer-events: auto;
+        outline: 2px solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+      }
+
+      .session-main {
         display: grid;
         min-width: 0;
-        gap: 2px;
+        gap: 6px;
       }
 
       .session-title {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-size: 13px;
-        line-height: 1.3;
+        font-size: 14px;
+        line-height: 1.25;
         font-weight: 600;
         color: var(--vscode-foreground);
       }
 
-      .session-status {
-        font-size: 11px;
+      .session-meta {
+        display: inline-flex;
+        align-items: flex-end;
+        justify-content: flex-end;
+        justify-self: end;
+        min-width: 68px;
+        padding-top: 20px;
+        white-space: nowrap;
+        text-align: right;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .session-workspace {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
         line-height: 1.25;
         color: var(--vscode-descriptionForeground);
       }
 
-      .session-meta {
-        display: inline-flex;
-        align-items: center;
-        white-space: nowrap;
-        color: var(--vscode-descriptionForeground);
+      .session-workspace-empty {
+        opacity: 0.7;
       }
 
       .session-time {
-        font-size: 11px;
+        font-size: 14px;
         line-height: 1.25;
+        font-weight: 500;
       }
 
       .session-empty {
-        padding: 4px 10px 0;
+        padding: 4px 14px 0;
         font-size: 12px;
         color: var(--vscode-descriptionForeground);
       }
@@ -402,13 +498,28 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
       const autoClose = document.getElementById('auto-close');
       const experimentalMultiTab = document.getElementById('experimental-multi-tab');
       const sessionButtons = document.querySelectorAll('[data-session-resource]');
+      const deleteButtons = document.querySelectorAll('[data-delete-session-resource]');
+      let confirmingDeleteButton = null;
+
+      const resetDeleteConfirmation = () => {
+        if (!confirmingDeleteButton) {
+          return;
+        }
+
+        confirmingDeleteButton.classList.remove('session-delete-confirm');
+        confirmingDeleteButton.textContent = '×';
+        confirmingDeleteButton.title = 'Delete';
+        confirmingDeleteButton = null;
+      };
 
       button?.addEventListener('click', () => {
+        resetDeleteConfirmation();
         vscode.postMessage({ type: 'open-codex' });
       });
 
       sessionButtons.forEach(buttonElement => {
         buttonElement.addEventListener('click', () => {
+          resetDeleteConfirmation();
           const resource = buttonElement.getAttribute('data-session-resource') ?? '';
           vscode.postMessage({
             type: 'resume-codex-session',
@@ -417,7 +528,44 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
         });
       });
 
+      deleteButtons.forEach(buttonElement => {
+        buttonElement.addEventListener('click', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          const resource = buttonElement.getAttribute('data-delete-session-resource') ?? '';
+          if (!resource) {
+            return;
+          }
+
+          if (confirmingDeleteButton !== buttonElement) {
+            resetDeleteConfirmation();
+            confirmingDeleteButton = buttonElement;
+            buttonElement.classList.add('session-delete-confirm');
+            buttonElement.textContent = '✓';
+            buttonElement.title = 'Confirm delete';
+            return;
+          }
+
+          resetDeleteConfirmation();
+
+          vscode.postMessage({
+            type: 'delete-codex-session',
+            resource
+          });
+        });
+      });
+
+      document.addEventListener('click', event => {
+        const target = event.target;
+        if (target && target.closest && target.closest('[data-delete-session-resource]')) {
+          return;
+        }
+
+        resetDeleteConfirmation();
+      });
+
       autoClose?.addEventListener('change', event => {
+        resetDeleteConfirmation();
         const target = event.target;
         vscode.postMessage({
           type: 'set-auto-close',
@@ -426,6 +574,7 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
       });
 
       experimentalMultiTab?.addEventListener('change', event => {
+        resetDeleteConfirmation();
         const target = event.target;
         vscode.postMessage({
           type: 'set-experimental-multi-tab',

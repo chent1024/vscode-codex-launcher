@@ -79,6 +79,20 @@ export const env = {
   }
 };
 
+export const workspace = {
+  name: "test-workspace",
+  workspaceFolders: [
+    {
+      name: "test-workspace",
+      uri: {
+        fsPath: "/test-workspace",
+        path: "/test-workspace",
+        scheme: "file"
+      }
+    }
+  ]
+};
+
 export const window = {
   createOutputChannel: () => ({
     appendLine: () => undefined,

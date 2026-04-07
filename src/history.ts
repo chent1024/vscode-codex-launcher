@@ -11,6 +11,7 @@ export interface SavedCodexSession {
   status: SavedCodexSessionStatus;
   title: string;
   updatedAt: string;
+  workspaceLabel?: string;
 }
 
 export interface SavedCodexSessionSnapshot {
@@ -20,10 +21,12 @@ export interface SavedCodexSessionSnapshot {
   status?: SavedCodexSessionStatus;
   title?: string;
   updatedAt?: string;
+  workspaceLabel?: string;
 }
 
 export interface SavedCodexSessionStore {
   list(): SavedCodexSession[];
+  remove(resource: string): Promise<void>;
   upsert(snapshot: SavedCodexSessionSnapshot): Promise<SavedCodexSession>;
 }
 
@@ -39,6 +42,12 @@ export class GlobalStateSavedCodexSessionStore implements SavedCodexSessionStore
     return sanitizeSessions(this.globalState.get<SavedCodexSession[]>(HISTORY_KEY, []));
   }
 
+  public async remove(resource: string): Promise<void> {
+    const normalizedResource = normalizeResource(resource);
+    const nextSessions = this.list().filter((session) => session.resource !== normalizedResource);
+    await this.globalState.update(HISTORY_KEY, nextSessions);
+  }
+
   public async upsert(snapshot: SavedCodexSessionSnapshot): Promise<SavedCodexSession> {
     const resource = normalizeResource(snapshot.resource);
     const createdAt = normalizeDate(snapshot.createdAt);
@@ -46,6 +55,7 @@ export class GlobalStateSavedCodexSessionStore implements SavedCodexSessionStore
     const updatedAt = normalizeDate(snapshot.updatedAt);
     const status = normalizeStatus(snapshot.status);
     const title = normalizeTitle(snapshot.title);
+    const workspaceLabel = normalizeWorkspaceLabel(snapshot.workspaceLabel);
     const now = new Date().toISOString();
     const previousSessions = this.list();
     const existingSession = previousSessions.find((session) => session.resource === resource);
@@ -56,7 +66,8 @@ export class GlobalStateSavedCodexSessionStore implements SavedCodexSessionStore
           openedAt: openedAt ?? existingSession.openedAt,
           status,
           title,
-          updatedAt: updatedAt ?? now
+          updatedAt: updatedAt ?? now,
+          workspaceLabel: workspaceLabel ?? existingSession.workspaceLabel
         }
       : {
           createdAt: createdAt ?? now,
@@ -64,7 +75,8 @@ export class GlobalStateSavedCodexSessionStore implements SavedCodexSessionStore
           resource,
           status,
           title,
-          updatedAt: updatedAt ?? createdAt ?? now
+          updatedAt: updatedAt ?? createdAt ?? now,
+          workspaceLabel
         };
 
     const remainingSessions = previousSessions.filter((session) => session.resource !== resource);
@@ -76,7 +88,7 @@ export class GlobalStateSavedCodexSessionStore implements SavedCodexSessionStore
 
 export const createSavedCodexSessionSnapshotFromTab = (
   tab: vscode.Tab,
-  options: { openedAt?: string } = {}
+  options: { openedAt?: string; workspaceLabel?: string } = {}
 ): SavedCodexSessionSnapshot | null => {
   const input = tab.input;
   if (!isCodexCustomEditorInput(input)) {
@@ -90,7 +102,8 @@ export const createSavedCodexSessionSnapshotFromTab = (
   return {
     openedAt: options.openedAt,
     resource: input.uri.toString(),
-    title: tab.label
+    title: tab.label,
+    workspaceLabel: options.workspaceLabel
   };
 };
 
@@ -147,7 +160,8 @@ const sanitizeSessions = (sessions: SavedCodexSession[]): SavedCodexSession[] =>
         resource: normalizeResource(session.resource),
         status: normalizeStatus(session.status),
         title: normalizeTitle(session.title),
-        updatedAt
+        updatedAt,
+        workspaceLabel: normalizeWorkspaceLabel("workspaceLabel" in session ? session.workspaceLabel : undefined)
       };
     })
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
@@ -177,6 +191,15 @@ const normalizeStatus = (status?: string): SavedCodexSessionStatus => {
 const normalizeTitle = (title?: string): string => {
   const normalized = stripCorruptedTitleSuffix(title?.replace(/\s+/g, " ").trim() ?? "");
   return normalized.length > 0 ? normalized : DEFAULT_TITLE;
+};
+
+const normalizeWorkspaceLabel = (workspaceLabel?: string): string | undefined => {
+  if (typeof workspaceLabel !== "string") {
+    return undefined;
+  }
+
+  const normalized = workspaceLabel.replace(/\s+/g, " ").trim();
+  return normalized.length > 0 ? normalized : undefined;
 };
 
 const stripCorruptedTitleSuffix = (title: string): string => {

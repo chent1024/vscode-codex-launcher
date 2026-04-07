@@ -148,9 +148,10 @@ const captureCodexSessionTabs = async (
 ): Promise<void> => {
   let captured = false;
   const openedAt = options.recordOpenTime ? new Date().toISOString() : undefined;
+  const workspaceLabel = getCurrentWorkspaceLabel(vscode);
 
   for (const tab of tabs) {
-    const snapshot = createSavedCodexSessionSnapshotFromTab(tab, { openedAt });
+    const snapshot = createSavedCodexSessionSnapshotFromTab(tab, { openedAt, workspaceLabel });
     if (!snapshot) {
       continue;
     }
@@ -175,10 +176,16 @@ const createSessionSync = (
 ): CodexSessionSync =>
   new OpenAICodexSessionSync(logger, {
     onSessionSnapshot: async (snapshot) => {
-      await sessionStore.upsert(snapshot);
+      await sessionStore.upsert({
+        ...snapshot,
+        workspaceLabel: getCurrentWorkspaceLabel(vscode)
+      });
       sidebarViewProvider.refresh();
     }
   });
+
+const getCurrentWorkspaceLabel = (vscodeApi: typeof vscode): string | undefined =>
+  vscodeApi.workspace.name ?? vscodeApi.workspace.workspaceFolders?.[0]?.name;
 
 const handleErrorAction = async (
   action: ErrorActionLabel | undefined,

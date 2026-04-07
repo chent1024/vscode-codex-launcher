@@ -21,7 +21,8 @@ describe("GlobalStateSavedCodexSessionStore", () => {
       openedAt: "2026-04-07T00:10:00.000Z",
       resource: "openai-codex://route/local/thread-1",
       status: "In Progress",
-      title: "Codex Session"
+      title: "Codex Session",
+      workspaceLabel: "open-codex"
     });
     await store.upsert({
       resource: "openai-codex://route/local/thread-1",
@@ -34,6 +35,7 @@ describe("GlobalStateSavedCodexSessionStore", () => {
     expect(sessions[0]?.status).toBe("Completed");
     expect(sessions[0]?.title).toBe("Fix button freeze on send");
     expect(sessions[0]?.openedAt).toBe("2026-04-07T00:10:00.000Z");
+    expect(sessions[0]?.workspaceLabel).toBe("open-codex");
   });
 
   it("keeps the most recently updated session first", async () => {
@@ -98,6 +100,27 @@ describe("GlobalStateSavedCodexSessionStore", () => {
     expect(sessions[0]?.title).toBe("t7");
   });
 
+  it("removes a saved session by resource", async () => {
+    const store = new GlobalStateSavedCodexSessionStore(createMemento() as never);
+
+    await store.upsert({
+      resource: "openai-codex://route/local/thread-1",
+      status: "Completed",
+      title: "First"
+    });
+    await store.upsert({
+      resource: "openai-codex://route/local/thread-2",
+      status: "Completed",
+      title: "Second"
+    });
+
+    await store.remove("openai-codex://route/local/thread-1");
+
+    const sessions = store.list();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.resource).toBe("openai-codex://route/local/thread-2");
+  });
+
   it("captures openedAt when a tab snapshot is created for a newly opened window", () => {
     const snapshot = createSavedCodexSessionSnapshotFromTab(
       {
@@ -109,10 +132,11 @@ describe("GlobalStateSavedCodexSessionStore", () => {
         },
         label: "Fix button freeze"
       } as never,
-      { openedAt: "2026-04-07T00:15:00.000Z" }
+      { openedAt: "2026-04-07T00:15:00.000Z", workspaceLabel: "open-codex" }
     );
 
     expect(snapshot?.openedAt).toBe("2026-04-07T00:15:00.000Z");
+    expect(snapshot?.workspaceLabel).toBe("open-codex");
   });
 });
 
@@ -131,7 +155,8 @@ describe("createSavedCodexSessionSnapshotFromTab", () => {
     expect(snapshot).toEqual({
       openedAt: undefined,
       resource: "openai-codex://route/local/thread-1",
-      title: "Fix button freeze"
+      title: "Fix button freeze",
+      workspaceLabel: undefined
     });
   });
 

@@ -23,9 +23,11 @@ const createSessionStore = (
     status: "Completed" | "In Progress" | "Failed";
     title: string;
     updatedAt: string;
+    workspaceLabel?: string;
   }> = []
 ) => ({
   list: vi.fn().mockReturnValue(sessions),
+  remove: vi.fn().mockResolvedValue(undefined),
   upsert: vi.fn()
 });
 
@@ -81,7 +83,8 @@ describe("SidebarLauncherViewProvider", () => {
         resource: "openai-codex://route/local/thread-1",
         status: "Completed",
         title: "Fix prompt handling",
-        updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        workspaceLabel: "open-codex"
       }
     ]);
     const { view } = createResolvedView();
@@ -96,13 +99,23 @@ describe("SidebarLauncherViewProvider", () => {
     expect(view.webview.html).toContain("Open New Codex");
     expect(view.webview.html).toContain("Sessions");
     expect(view.webview.html).toContain("Fix prompt handling");
-    expect(view.webview.html).toContain("Completed");
+    expect(view.webview.html).toContain("open-codex");
     expect(view.webview.html).toContain("data-session-resource=\"openai-codex://route/local/thread-1\"");
     expect(view.webview.html).toContain("session-list-wrap");
     expect(view.webview.html).toContain("position: fixed");
     expect(view.webview.html).toContain("flex-direction: column");
     expect(view.webview.html).toContain("sessions-panel");
     expect(view.webview.html).toContain("flex: 1 1 auto");
+    expect(view.webview.html).toContain("session-delete");
+    expect(view.webview.html).toContain("session-workspace");
+    expect(view.webview.html).toContain("session-main");
+    expect(view.webview.html).toContain("padding-top: 20px");
+    expect(view.webview.html).toContain("top: 8px");
+    expect(view.webview.html).toContain("font-size: 14px");
+    expect(view.webview.html).toContain("justify-self: end");
+    expect(view.webview.html).toContain("data-delete-session-resource=\"openai-codex://route/local/thread-1\"");
+    expect(view.webview.html).not.toContain("session-status");
+    expect(view.webview.html).not.toContain(">Completed<");
     expect(view.webview.html).not.toContain("session-icon");
     expect(view.webview.html).not.toContain("session-dot");
   });
@@ -191,6 +204,28 @@ describe("SidebarLauncherViewProvider", () => {
 
     expect(globalState.update).toHaveBeenCalledWith("codexLauncher.autoCloseSidebarOnSuccess", false);
     expect(globalState.update).toHaveBeenCalledWith("codexLauncher.experimentalMultiTab", true);
+  });
+
+  it("deletes a saved session from the list", async () => {
+    const globalState = createGlobalState();
+    const sessionStore = createSessionStore();
+    const { getHandler, view } = createResolvedView();
+    const provider = new SidebarLauncherViewProvider(
+      vscode.Uri.file("/test-extension"),
+      globalState as never,
+      sessionStore as never
+    );
+
+    provider.resolveWebviewView(view as never);
+
+    const handler = getHandler();
+    if (!handler) {
+      throw new Error("Webview message handler was not registered.");
+    }
+
+    await handler({ resource: "openai-codex://route/local/thread-1", type: "delete-codex-session" });
+
+    expect(sessionStore.remove).toHaveBeenCalledWith("openai-codex://route/local/thread-1");
   });
 
   it("refreshes the session list when another window updates the shared history", async () => {
