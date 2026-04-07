@@ -75,6 +75,23 @@ export const launchCodexChatViaUniqueUri = async (
 ): Promise<void> => {
   const targetUri = createUniqueCodexPanelUri(vscodeApi);
 
+  await openCodexEditor(vscodeApi, details, targetUri, "Failed to open a unique Codex editor resource.");
+};
+
+export const launchSavedCodexSession = async (
+  vscodeApi: typeof vscode,
+  details: CodexEnvironmentDetails,
+  targetUri: vscode.Uri
+): Promise<void> => {
+  await openCodexEditor(vscodeApi, details, targetUri, "Failed to reopen the selected Codex session.");
+};
+
+const openCodexEditor = async (
+  vscodeApi: typeof vscode,
+  details: CodexEnvironmentDetails,
+  targetUri: vscode.Uri,
+  errorMessage: string
+): Promise<void> => {
   try {
     await vscodeApi.commands.executeCommand("vscode.openWith", targetUri, CODEX_CUSTOM_EDITOR_VIEW_TYPE, {
       preserveFocus: false,
@@ -83,7 +100,7 @@ export const launchCodexChatViaUniqueUri = async (
   } catch (error) {
     throw new CodexLauncherError(
       "CODEX_COMMAND_EXEC_FAILED",
-      "Failed to open a unique Codex editor resource.",
+      errorMessage,
       details,
       error
     );

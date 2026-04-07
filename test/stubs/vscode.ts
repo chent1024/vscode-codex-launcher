@@ -53,7 +53,18 @@ export const Uri = {
     path: [base.path, ...paths].join("/").replace(/\/+/g, "/"),
     query: "",
     scheme: base.scheme ?? "file"
-  })
+  }),
+  parse: (value: string) => {
+    const url = new URL(value);
+    return {
+      authority: url.hostname,
+      fsPath: url.pathname,
+      path: url.pathname,
+      query: url.search ? url.search.slice(1) : "",
+      scheme: url.protocol.replace(/:$/, ""),
+      toString: () => value
+    };
+  }
 };
 
 export const extensions = {
@@ -84,6 +95,22 @@ export const window = {
   registerWebviewViewProvider: () => ({
     dispose: () => undefined
   }),
+  tabGroups: {
+    all: [],
+    activeTabGroup: {
+      activeTab: undefined,
+      isActive: true,
+      tabs: [],
+      viewColumn: 1
+    },
+    close: async () => true,
+    onDidChangeTabGroups: () => ({
+      dispose: () => undefined
+    }),
+    onDidChangeTabs: () => ({
+      dispose: () => undefined
+    })
+  },
   showErrorMessage: async () => undefined,
   showInformationMessage: async () => undefined
 };

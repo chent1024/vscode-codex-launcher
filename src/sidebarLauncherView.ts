@@ -1,79 +1,145 @@
 import * as vscode from "vscode";
 
+import type { SavedCodexSession, SavedCodexSessionStore } from "./history";
 import {
   AUTO_CLOSE_SIDEBAR_SETTING_KEY,
   EXPERIMENTAL_MULTI_TAB_SETTING_KEY,
-  OPEN_NEW_CODEX_CHAT_COMMAND
+  OPEN_NEW_CODEX_CHAT_COMMAND,
+  RESUME_SAVED_CODEX_SESSION_COMMAND
 } from "./types";
 
 export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
+  private currentView: vscode.WebviewView | undefined;
+
   public constructor(
     private readonly extensionUri: vscode.Uri,
-    private readonly globalState: vscode.Memento
+    private readonly globalState: vscode.Memento,
+    private readonly sessionStore: SavedCodexSessionStore
   ) {}
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
-    const cspSource = webviewView.webview.cspSource;
-    const nonce = getNonce();
-    let autoCloseSidebar = this.globalState.get<boolean>(AUTO_CLOSE_SIDEBAR_SETTING_KEY, true);
-    let experimentalMultiTab = this.globalState.get<boolean>(EXPERIMENTAL_MULTI_TAB_SETTING_KEY, false);
+    this.currentView = webviewView;
+    webviewView.onDidDispose(() => {
+      if (this.currentView === webviewView) {
+        this.currentView = undefined;
+      }
+    });
 
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [this.extensionUri]
     };
-    webviewView.webview.html = this.getHtml(cspSource, nonce, autoCloseSidebar, experimentalMultiTab);
-    webviewView.webview.onDidReceiveMessage(async message => {
+    this.render(webviewView);
+    webviewView.webview.onDidReceiveMessage(async (message) => {
       if (!message || typeof message !== "object" || !("type" in message)) {
         return;
       }
 
       if (message.type === "set-auto-close") {
         const enabled = "enabled" in message && typeof message.enabled === "boolean" ? message.enabled : true;
-        autoCloseSidebar = enabled;
         await this.globalState.update(AUTO_CLOSE_SIDEBAR_SETTING_KEY, enabled);
         return;
       }
 
       if (message.type === "set-experimental-multi-tab") {
         const enabled = "enabled" in message && typeof message.enabled === "boolean" ? message.enabled : false;
-        experimentalMultiTab = enabled;
         await this.globalState.update(EXPERIMENTAL_MULTI_TAB_SETTING_KEY, enabled);
         return;
       }
 
       if (message.type === "open-codex") {
-        const opened = await vscode.commands.executeCommand<boolean>(OPEN_NEW_CODEX_CHAT_COMMAND);
-        if (opened && autoCloseSidebar) {
-          await vscode.commands.executeCommand("workbench.action.closeSidebar");
-        }
+        await this.runCommandAndMaybeClose(OPEN_NEW_CODEX_CHAT_COMMAND);
+        return;
+      }
+
+      if (message.type === "resume-codex-session") {
+        const resource = "resource" in message && typeof message.resource === "string" ? message.resource : "";
+        await this.runCommandAndMaybeClose(RESUME_SAVED_CODEX_SESSION_COMMAND, { resource });
       }
     });
+  }
+
+  public refresh(): void {
+    if (this.currentView) {
+      this.render(this.currentView);
+    }
+  }
+
+  private async runCommandAndMaybeClose(command: string, payload?: { resource: string }): Promise<void> {
+    const autoCloseSidebar = this.globalState.get<boolean>(AUTO_CLOSE_SIDEBAR_SETTING_KEY, true);
+    const opened = await vscode.commands.executeCommand<boolean>(command, payload);
+
+    if (opened && autoCloseSidebar) {
+      await vscode.commands.executeCommand("workbench.action.closeSidebar");
+    }
+  }
+
+  private render(webviewView: vscode.WebviewView): void {
+    const cspSource = webviewView.webview.cspSource;
+    const nonce = getNonce();
+    const autoCloseSidebar = this.globalState.get<boolean>(AUTO_CLOSE_SIDEBAR_SETTING_KEY, true);
+    const experimentalMultiTab = this.globalState.get<boolean>(EXPERIMENTAL_MULTI_TAB_SETTING_KEY, false);
+
+    webviewView.webview.html = this.getHtml(
+      cspSource,
+      nonce,
+      autoCloseSidebar,
+      experimentalMultiTab,
+      this.sessionStore.list()
+    );
   }
 
   private getHtml(
     cspSource: string,
     nonce: string,
     autoCloseSidebar: boolean,
-    experimentalMultiTab: boolean
+    experimentalMultiTab: boolean,
+    sessions: SavedCodexSession[]
   ): string {
+    const sessionMarkup =
+      sessions.length > 0
+        ? sessions
+            .map((session) => {
+              const title = escapeHtml(session.title);
+              const time = escapeHtml(formatRelativeTime(session.updatedAt));
+              const resource = escapeAttribute(session.resource);
+
+              return `<li>
+                <button class="session-item" type="button" data-session-resource="${resource}">
+                  <span class="session-copy">
+                    <span class="session-title">${title}</span>
+                    <span class="session-status">${escapeHtml(session.status)}</span>
+                  </span>
+                  <span class="session-meta">
+                    <span class="session-time">${time}</span>
+                  </span>
+                </button>
+              </li>`;
+            })
+            .join("")
+        : `<li class="session-empty">Send one message in Codex and it will appear here.</li>`;
+
     return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-      <meta
-        http-equiv="Content-Security-Policy"
-        content="default-src 'none'; img-src ${cspSource} data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';"
-      />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src ${cspSource} data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       :root {
         color-scheme: light dark;
       }
 
+      * {
+        box-sizing: border-box;
+      }
+
       body {
         margin: 0;
-        padding: 16px;
+        padding: 14px 0;
         font-family: var(--vscode-font-family);
         background: var(--vscode-sideBar-background);
         color: var(--vscode-foreground);
@@ -82,6 +148,10 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
       .container {
         display: grid;
         gap: 14px;
+      }
+
+      .launcher {
+        padding: 0 14px;
       }
 
       .button {
@@ -96,10 +166,7 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
         background: color-mix(in srgb, var(--vscode-button-background) 94%, #0078d4 6%);
         cursor: pointer;
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-        transition:
-          background-color 140ms ease,
-          border-color 140ms ease,
-          filter 140ms ease;
+        transition: background-color 140ms ease, border-color 140ms ease, filter 140ms ease;
       }
 
       .button:hover {
@@ -111,9 +178,96 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
         filter: brightness(0.98);
       }
 
-      .button:focus-visible {
+      .button:focus-visible,
+      .session-item:focus-visible {
         outline: 2px solid var(--vscode-focusBorder);
         outline-offset: 2px;
+      }
+
+      .section-title {
+        margin: 0;
+        padding: 0 14px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--vscode-foreground);
+      }
+
+      .session-list-wrap {
+        margin: 0 8px;
+        max-height: min(280px, 42vh);
+        overflow-y: auto;
+      }
+
+      .session-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .session-item {
+        width: 100%;
+        border: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px 10px;
+        align-items: start;
+        padding: 8px 10px;
+        border-radius: 6px;
+        font: inherit;
+        text-align: left;
+        color: inherit;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .session-item:hover {
+        background: color-mix(in srgb, var(--vscode-list-hoverBackground) 70%, transparent);
+      }
+
+      .session-copy {
+        display: grid;
+        min-width: 0;
+        gap: 2px;
+      }
+
+      .session-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        line-height: 1.3;
+        font-weight: 600;
+        color: var(--vscode-foreground);
+      }
+
+      .session-status {
+        font-size: 11px;
+        line-height: 1.25;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .session-meta {
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .session-time {
+        font-size: 11px;
+        line-height: 1.25;
+      }
+
+      .session-empty {
+        padding: 4px 10px 0;
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .settings {
+        display: grid;
+        gap: 10px;
+        padding: 0 14px 2px;
       }
 
       .toggle {
@@ -136,24 +290,45 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
   </head>
   <body>
     <div class="container">
-      <button class="button" id="open-codex" type="button">Open New Codex</button>
-      <label class="toggle" for="auto-close">
-        <input id="auto-close" type="checkbox" ${autoCloseSidebar ? "checked" : ""} />
-        <span>Success then close sidebar</span>
-      </label>
-      <label class="toggle" for="experimental-multi-tab">
-        <input id="experimental-multi-tab" type="checkbox" ${experimentalMultiTab ? "checked" : ""} />
-        <span>Experimental multiple tabs</span>
-      </label>
+      <div class="launcher">
+        <button class="button" id="open-codex" type="button">Open New Codex</button>
+      </div>
+      <h2 class="section-title">Sessions</h2>
+      <div class="session-list-wrap">
+        <ul class="session-list">${sessionMarkup}</ul>
+      </div>
+      <div class="settings">
+        <label class="toggle" for="auto-close">
+          <input id="auto-close" type="checkbox" ${autoCloseSidebar ? "checked" : ""} />
+          <span>Success then close sidebar</span>
+        </label>
+        <label class="toggle" for="experimental-multi-tab">
+          <input id="experimental-multi-tab" type="checkbox" ${experimentalMultiTab ? "checked" : ""} />
+          <span>Experimental multiple tabs</span>
+        </label>
+      </div>
     </div>
     <script nonce="${nonce}">
       const vscode = acquireVsCodeApi();
       const button = document.getElementById('open-codex');
       const autoClose = document.getElementById('auto-close');
       const experimentalMultiTab = document.getElementById('experimental-multi-tab');
+      const sessionButtons = document.querySelectorAll('[data-session-resource]');
+
       button?.addEventListener('click', () => {
         vscode.postMessage({ type: 'open-codex' });
       });
+
+      sessionButtons.forEach(buttonElement => {
+        buttonElement.addEventListener('click', () => {
+          const resource = buttonElement.getAttribute('data-session-resource') ?? '';
+          vscode.postMessage({
+            type: 'resume-codex-session',
+            resource
+          });
+        });
+      });
+
       autoClose?.addEventListener('change', event => {
         const target = event.target;
         vscode.postMessage({
@@ -161,6 +336,7 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
           enabled: Boolean(target && 'checked' in target && target.checked)
         });
       });
+
       experimentalMultiTab?.addEventListener('change', event => {
         const target = event.target;
         vscode.postMessage({
@@ -173,6 +349,34 @@ export class SidebarLauncherViewProvider implements vscode.WebviewViewProvider {
 </html>`;
   }
 }
+
+const formatRelativeTime = (timestamp: string): string => {
+  const parsedDate = new Date(timestamp);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  const diffMs = Date.now() - parsedDate.getTime();
+  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes} min`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours} hr`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} d`;
+};
+
+const escapeAttribute = (value: string): string =>
+  escapeHtml(value).replaceAll('"', "&quot;");
+
+const escapeHtml = (value: string): string =>
+  value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 
 const getNonce = (): string => {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";

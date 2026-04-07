@@ -18,7 +18,7 @@ const createContext = () => ({
     scheme: "file"
   },
   globalState: {
-    get: vi.fn().mockReturnValue([]),
+    get: vi.fn((_key: string, defaultValue: unknown) => defaultValue),
     update: vi.fn().mockResolvedValue(undefined)
   },
   subscriptions: [] as { dispose: () => void }[]
@@ -50,11 +50,22 @@ const createUriApi = () => ({
       query: query ?? "",
       scheme: scheme ?? "file"
     })
-  })
+  }),
+  parse: (value: string) => {
+    const url = new URL(value);
+    return {
+      authority: url.hostname,
+      fsPath: url.pathname,
+      path: url.pathname,
+      query: url.search ? url.search.slice(1) : "",
+      scheme: url.protocol.replace(/:$/, ""),
+      toString: () => value
+    };
+  }
 });
 
 describe("registerExtension", () => {
-  it("registers only the open-chat command", () => {
+  it("registers the open and resume commands", () => {
     const registeredCommands: string[] = [];
     const vscodeApi = {
       commands: {
@@ -79,8 +90,11 @@ describe("registerExtension", () => {
       vscodeApi: vscodeApi as never
     });
 
-    expect(disposables).toHaveLength(1);
-    expect(registeredCommands).toEqual(["codexLauncher.openNewCodexChat"]);
+    expect(disposables).toHaveLength(2);
+    expect(registeredCommands).toEqual([
+      "codexLauncher.openNewCodexChat",
+      "codexLauncher.resumeSavedCodexSession"
+    ]);
   });
 
   it("shows an error and output channel when opening a chat fails", async () => {
@@ -279,6 +293,70 @@ describe("registerExtension", () => {
 
     expect(vscodeApi.commands.executeCommand).toHaveBeenCalledWith("chatgpt.newCodexPanel");
     expect(vscodeApi.window.showErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it("reopens a saved Codex session from its stored resource", async () => {
+    const callbacks = new Map<string, (request?: { resource?: string }) => Promise<void>>();
+    const executeCommand = vi.fn().mockImplementation(async (commandId: string) => {
+      if (commandId === "vscode.openWith") {
+        return undefined;
+      }
+      return undefined;
+    });
+    const vscodeApi = {
+      commands: {
+        executeCommand,
+        getCommands: vi.fn().mockResolvedValue(["chatgpt.newCodexPanel"]),
+        registerCommand: vi.fn((commandId: string, callback: (request?: { resource?: string }) => Promise<void>) => {
+          callbacks.set(commandId, callback);
+          return {
+            dispose: vi.fn()
+          };
+        })
+      },
+      env: createEnv(),
+      extensions: {
+        getExtension: vi.fn().mockReturnValue({
+          activate: vi.fn().mockResolvedValue(undefined),
+          packageJSON: {
+            version: "0.4.76"
+          }
+        })
+      },
+      Uri: createUriApi(),
+      version: "1.99.0",
+      window: {
+        showErrorMessage: vi.fn().mockResolvedValue(undefined),
+        showInformationMessage: vi.fn().mockResolvedValue(undefined)
+      }
+    };
+
+    registerExtension({
+      logger: createLogger(),
+      outputChannel: createOutputChannel() as never,
+      vscodeApi: vscodeApi as never
+    });
+
+    const resumeCommand = callbacks.get("codexLauncher.resumeSavedCodexSession");
+    if (!resumeCommand) {
+      throw new Error("Resume command was not registered.");
+    }
+
+    await resumeCommand({ resource: "openai-codex://route/local/thread-1" });
+
+    expect(executeCommand).toHaveBeenCalledWith(
+      "vscode.openWith",
+      expect.objectContaining({
+        authority: "route",
+        path: "/local/thread-1",
+        scheme: "openai-codex"
+      }),
+      "chatgpt.conversationEditor",
+      expect.objectContaining({
+        preserveFocus: false,
+        preview: false
+      })
+    );
   });
 
   it("retries opening a chat when the user selects Retry", async () => {
@@ -524,8 +602,14 @@ describe("activate", () => {
       .spyOn(vscodeModule.commands, "registerCommand")
       .mockImplementation(() => ({ dispose: vi.fn() }) as never);
     const context = createContext();
+    const sessionSync = {
+      dispose: vi.fn(),
+      start: vi.fn()
+    };
 
-    activate(context as never);
+    activate(context as never, {
+      createSessionSync: () => sessionSync
+    });
     deactivate();
 
     expect(createOutputChannelSpy).toHaveBeenCalledWith("Open Codex");
@@ -538,8 +622,9 @@ describe("activate", () => {
     expect(statusBarItem.text).toBe("$(sparkle) Open Codex");
     expect(statusBarItem.tooltip).toBe("Open a new Codex tab");
     expect(statusBarItem.show).toHaveBeenCalledTimes(1);
-    expect(registerCommandSpy).toHaveBeenCalledTimes(1);
-    expect(context.subscriptions.length).toBeGreaterThanOrEqual(3);
+    expect(sessionSync.start).toHaveBeenCalledTimes(1);
+    expect(registerCommandSpy).toHaveBeenCalledTimes(2);
+    expect(context.subscriptions.length).toBeGreaterThanOrEqual(4);
 
     createOutputChannelSpy.mockRestore();
     createStatusBarItemSpy.mockRestore();

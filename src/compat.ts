@@ -6,7 +6,8 @@ import {
   ensureCodexCommandAvailable,
   findCodexExtension,
   launchCodexChat,
-  launchCodexChatViaUniqueUri
+  launchCodexChatViaUniqueUri,
+  launchSavedCodexSession
 } from "./codexBridge";
 import type { Logger } from "./logger";
 import { toErrorMetadata } from "./logger";
@@ -115,4 +116,29 @@ export const openNewCodexChat = async (
 
   await launchCodexChat(vscodeApi, details);
   logger.info("Opened a new Codex chat via the public command fallback.", details);
+};
+
+export const resumeSavedCodexChat = async (vscodeApi: typeof vscode, logger: Logger, resource: string): Promise<void> => {
+  const extension = findCodexExtension(vscodeApi);
+  const details = createEnvironmentDetails(vscodeApi, extension);
+
+  logger.info("Reopening a saved Codex session.", {
+    ...details,
+    resource
+  });
+
+  if (!extension) {
+    throw new CodexLauncherError("CODEX_NOT_INSTALLED", "Codex extension is not installed.", details);
+  }
+
+  try {
+    await activateCodexExtension(extension, details);
+  } catch (error) {
+    logger.error("Codex extension activation failed.", toErrorMetadata(error));
+    throw error;
+  }
+
+  const targetUri = vscodeApi.Uri.parse(resource);
+  await launchSavedCodexSession(vscodeApi, details, targetUri);
+  logger.info("Reopened a saved Codex session.", details);
 };

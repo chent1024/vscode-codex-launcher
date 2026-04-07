@@ -35,6 +35,18 @@ code --install-extension chent.open-codex
 
 For local `.vsix` installation, replace the Marketplace identifier with the generated package filename. If you use Cursor or another VS Code-compatible editor, replace `code` with the corresponding CLI command.
 
+For local development, you can also use the one-click script to build, package, install, and reload the editor window:
+
+```bash
+npm run install:reload
+```
+
+Optional flags:
+
+- `bash ./scripts/install-and-reload.sh --cli cursor`
+- `bash ./scripts/install-and-reload.sh --no-reload`
+- `bash ./scripts/install-and-reload.sh --skip-npm-install`
+
 ## Usage
 
 1. Install and enable the OpenAI ChatGPT extension.

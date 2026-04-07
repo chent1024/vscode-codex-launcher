@@ -5,6 +5,7 @@ export const CODEX_URI_AUTHORITY = "route";
 export const CODEX_NEW_PANEL_PATH = "/extension/panel/new";
 export const CODEX_URI_SCHEME = "openai-codex";
 export const OPEN_NEW_CODEX_CHAT_COMMAND = "codexLauncher.openNewCodexChat";
+export const RESUME_SAVED_CODEX_SESSION_COMMAND = "codexLauncher.resumeSavedCodexSession";
 export const SIDEBAR_VIEW_ID = "codexLauncher.sidebarView";
 export const OUTPUT_CHANNEL_NAME = "Open Codex";
 export const AUTO_CLOSE_SIDEBAR_SETTING_KEY = "codexLauncher.autoCloseSidebarOnSuccess";
